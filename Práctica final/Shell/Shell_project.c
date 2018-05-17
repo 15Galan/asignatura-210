@@ -15,6 +15,7 @@ Para compilar y ejecutar el programa:
 */
 
 #include "job_control.h"	// RECORDAR: Compilar con el modulo "job_control.c".
+#include "string.h"     // Importar para poder usar la funcion "strcmp()".
 
 #define MAX_LINE 256	// 256 caracteres por linea (por comando), deberia ser suficiente.
 
@@ -44,18 +45,35 @@ int main(void) {
 
         get_command(inputBuffer, MAX_LINE, args, &background);    // Obtener siguiente comando.
 
-        if (args[0] == NULL) continue;   // Si el comando "esta vacio".
+        if (args[0] == NULL) continue;  // Si se introduce un comando "vacio" se vuelve a pedir.
 
-        // PASOS:
-        // (1)  Crear un proceso hijo usando "fork()".
-        pid_fork = fork();
+        if(strcmp(args[0], "cd") == 0) {     // "strcmp" para comparar Strings.
+            if(args[1] != NULL) {
+                chdir(args[1]);     // Cambiar directorio a "args[1]".
 
-        if (pid_fork == -1) {
-            printf("Fallo en fork().\n\n");
+            }else{
+                chdir(getenv("HOME"));  // "getenv" para convertir "HOME" en la ruta a "/home".
+            }
+
+            estado = analyze_status(status,&info);
+
+            if (info != 1){
+                printf("\nForeground    pid: %i, command: %s, %s, info: %i.\n\n",
+                       getpid(), args[0], status_strings[estado], info);
+            }
+
             continue;
         }
 
-        // (2)  EL proceso hijo invoca "execvp()".
+        /// PASOS:
+        /// (1)  Crear un proceso hijo usando "fork()".
+        pid_fork = fork();
+
+        if (pid_fork == -1) {   // Necesario comprobar que el hijo se cree correctamente.
+            printf("Fallo en fork().\n\n");
+        }
+
+        /// (2)  EL proceso hijo invoca "execvp()".
         if (pid_fork == 0) {    // Proceso HIJO.
             new_process_group(getpid());    // Crear un grupo de procesos para el proceso hijo.
 
@@ -68,30 +86,32 @@ int main(void) {
             exit(EXIT_FAILURE);
 
         } else {    // Proceso PADRE.
-            new_process_group(pid_fork);
+            new_process_group(pid_fork);    // Crear un grupo de procesos para el proceso padre.
 
-            // (3)  Si "background == 0", el proceso padre espera, sino continua.
-            if (background == 0) {      // Proceso en FOREGROUND.
-                set_terminal(pid_fork); // Asigna la Terminal al proceso hijo.
+            /// (3)  Si "background == 0", el proceso padre espera, sino continua.
+            if (background == 0) {          // Proceso en FOREGROUND.
+                set_terminal(pid_fork);     // Asigna la Terminal al proceso hijo.
 
                 pid_wait = waitpid(pid_fork, &status, WUNTRACED);
-                
+
+                set_terminal(getpid());     // Asigna la Terminal al proceso en ejecucion.
+
                 estado = analyze_status(status, &info);
 
-                // (4) La Shell muestra un mensaje del estado del comando ejecutado.
+                /// (4) La Shell muestra un mensaje del estado del comando ejecutado.
                 if (info != 1) {
                     printf("\nForeground    pid: %i, command: %s, %s, info: %i.\n\n",
                            pid_fork, args[0], status_strings[estado], info);
                 }
 
-            } else {  // Proceso en BACKGROUND.
-                // (4)  La Shell muestra un mensaje del estado del comando ejecutado.
+            } else {    // Proceso en BACKGROUND.
+                /// (4)  La Shell muestra un mensaje del estado del comando ejecutado.
                 if (info != 1) {
                     printf("\nBackground    job running... pid: %i, %s.\n\n", pid_fork, args[0]);
                 }
             }
 
-            // (5)  El bucle vuelve a la funcion "get_commnad()".
+            /// (5)  El bucle vuelve a la funcion "get_commnad()".
         }
 
         // Fin del "while()".
