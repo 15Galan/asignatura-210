@@ -161,7 +161,7 @@ job * get_item_bypos( job * list, int n)
 void print_item(job * item)
 {
 
-	printf("pid: %d, command: %s, state: %s\n", item->pgid, item->command, state_strings[item->state]);
+	printf("pid: %d, comando: %s, estado: %s.\n", item->pgid, item->command, state_strings[item->state]);
 }
 
 // -----------------------------------------------------------------------
@@ -170,14 +170,16 @@ void print_list(job * list, void (*print)(job *))
 {
 	int n=1;
 	job * aux=list;
-	printf("Contents of %s:\n",list->command);
+	printf("Contenido de '%s':\n",list->command);
 	while(aux->next!= NULL) 
 	{
-		printf(" [%d] ",n);
+		printf("  [%d] ",n);
 		print(aux->next);
 		n++;
 		aux=aux->next;
 	}
+
+	printf("\n");
 }
 
 // -----------------------------------------------------------------------
