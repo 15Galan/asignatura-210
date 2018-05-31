@@ -11,7 +11,7 @@ Para compilar y ejecutar el programa:
 	$ gcc Shell_project.c job_control.c -o Shell
 	$ ./Shell
 
-	(escribir "^D" para finalizar)
+	Escribir "^D" (CTRL+D) para finalizar.
 */
 
 #include "job_control.h"	// RECORDAR: Compilar con el modulo "job_control.c".
@@ -33,21 +33,23 @@ void manejador(int signal_id){      /// "signal(SEÑAL, manejador)" espera un "v
     enum status status_res;         // Estado procesado por "analyze_status()".
     job* trabajos = tareas->next;   // Puntero a "tareas" (el primer nodo contiene informacion, no es una tarea).
 
+    block_SIGCHLD();                // Se accede a la lista de tareas.
+
     while(trabajos != NULL) {
         pid_wait = waitpid(trabajos->pgid, &status, WUNTRACED | WNOHANG);   // Comprobar para cada proceso.
 
         status_res = analyze_status(status, &info);     // Estado procesado (Exited, Signaled o Suspended).
 
         if(pid_wait == trabajos->pgid) {    // Si el PID devuelto es el mismo, quiere decir que algo le paso al proceso.
-            if(status_res == EXITED || status_res == SIGNALED) {    // El proceso ha terminado o envio una señal.
-                printf("\nEl proceso '%s' (pid: %i) ha finalizado.\n", trabajos->command, trabajos->pgid);
+            if(status_res != SUSPENDED) {       // El proceso ha terminado o ha enviado una señal.
+                printf("\nSegundo Plano    El proceso '%s' (pid: %i) ha finalizado.\n", trabajos->command, trabajos->pgid);
 
                 job* auxiliar = trabajos->next; // Guardar temporalmente el puntero al siguiente proceso de la lista.
                 delete_job(tareas, trabajos);   // Elimina el proceso "trabajos" de la lista "tareas".
                 trabajos = auxiliar;            // Actualizar el trabajo (tarea) al siguiente, usando "auxiliar".
 
-            }else{  // SUSPENDED.
-                printf("\nEl proceso '%s' (pid: %i) se ha suspendido.\n", trabajos->command, trabajos->pgid);
+            }else{  // status_res == SUSPENDED.
+                printf("\nSegundo Plano    El proceso '%s' (pid: %i) se ha suspendido.\n", trabajos->command, trabajos->pgid);
 
                 trabajos->state = STOPPED;  // Cambiar estado del proceso a STOPPED.
                 trabajos = trabajos->next;  // Actualizar el trabajo (tarea) al siguiente.
@@ -57,6 +59,8 @@ void manejador(int signal_id){      /// "signal(SEÑAL, manejador)" espera un "v
             trabajos = trabajos->next;  // Actualizar el trabajo (tarea) al siguiente.
         }
     }
+
+    unblock_SIGCHLD();      // Se sale de la lista de tareas.
 }
 
 
@@ -92,7 +96,9 @@ int main(void) {
         /// Comandos Internos ("cd", "jobs", "fg" y "bg").
         if(strcmp(args[0], "cd") == 0) {        // "strcmp" para comparar Strings.
             if(args[1] != NULL) {
-                chdir(args[1]);         // Cambiar directorio a "args[1]".
+                chdir(args[1]);         // Cambiar directorio a "args[1]" si lo encuentra, si no, seguir con el codigo.
+
+                printf("\nNo se puede cambiar a la ruta '%s'.\n\n", args[1]);
 
             }else{
                 chdir(getenv("HOME"));  // "getenv" para convertir un String en ruta.
@@ -130,22 +136,31 @@ int main(void) {
                 printf("\nERROR: Proceso no encontrado.\n\n");
 
             }else{
-                auxiliar->state = FOREGROUND;       // Cambiar de BACKGROUND a FOREGROUND para ponerlo en primer plano.
+                if(auxiliar->state != FOREGROUND) {   // Actuar solo cuando la tarea esta en segundo plano o suspendida.
+                    auxiliar->state = FOREGROUND;       // Cambiar de BACKGROUND a FOREGROUND para ponerlo en primer plano.
 
-                printf("\nEl proceso '%s' (id en lista: %i) ha pasado a Primer Plano.\n\n", auxiliar->command, id);
+                    printf("\nEl proceso '%s' (id en lista: %i) ha pasado a Primer Plano.\n\n", auxiliar->command, id);
 
-                set_terminal(auxiliar->pgid);       // Asigna el Terminal al proceso indicado.
-                killpg(auxiliar->pgid, SIGCONT);    // Envia una señal al grupo de procesos para que estos continuen.
-                waitpid(auxiliar->pgid, &status, WUNTRACED);
-                set_terminal(getpid());             // Asigna el Terminal al proceso en ejecucion.
+                    set_terminal(auxiliar->pgid);       // Asigna el Terminal al proceso indicado.
+                    killpg(auxiliar->pgid, SIGCONT);    // Envia una señal al grupo de procesos para que estos continuen.
+                    waitpid(auxiliar->pgid, &status, WUNTRACED);
+                    set_terminal(getpid());             // Asigna el Terminal al proceso en ejecucion.
 
-                status_res = analyze_status(status, &info);     // Saber el estado para saber si finalizo la ejecucion.
+                    status_res = analyze_status(status, &info);     // Saber el estado para saber si finalizo la ejecucion.
 
-                if(status_res != SUSPENDED) {       // Si el estado no es SUSPENDED, el proceso termino su ejecucion.
-                    delete_job(tareas, auxiliar);   // Se elimina el proceso de la lista "tareas".
+                    printf("\nPrimer Plano    pid: %i, comando: %s, %s, info: %i.\n\n",
+                           auxiliar->pgid, auxiliar->command, status_strings[status_res], info);
 
-                }else{                              // Si el estado es SUSPENDED, el proceso esta detenido.
-                    auxiliar->state = STOPPED;      // Se indica que el proceso esta STOPPED (detenido) en su estado.
+                    if (status_res != SUSPENDED) {      // Si el estado no es SUSPENDED, el proceso termino su ejecucion.
+                        delete_job(tareas, auxiliar);   // Se elimina el proceso de la lista "tareas".
+
+                    } else {                            // Si el estado es SUSPENDED, el proceso esta detenido.
+                        auxiliar->state = STOPPED;      // Se indica que el proceso esta STOPPED (detenido) en su estado.
+                    }
+
+                }else{
+                    printf("El proceso '%s' (pid: %i) no estaba en Segundo Plano o Suspendido.",
+                            auxiliar->command, auxiliar->pgid);
                 }
             }
 
@@ -175,6 +190,9 @@ int main(void) {
                 printf("\nEl proceso '%s' (id en lista: %i) ha pasado a Segundo Plano.\n\n", auxiliar->command, id);
 
                 killpg(auxiliar->pgid, SIGCONT);    // Envia una señal al grupo de procesos para que estos continuen.
+
+                printf("\nSegundo Plano    Ejecutándose... pid: %i, comando: %s.\n\n", pid_fork, args[0]);
+
             }
 
             continue;   // La Shell debe recibir otro comando tras finalizar la ejecucion de un comando interno.
@@ -219,8 +237,8 @@ int main(void) {
 
                 /// (4) La Shell muestra un mensaje del estado del comando ejecutado.
                 //if (info != 1) {
-                    printf("\nPrimer Plano    pid: %i, comando: %s, %s, info: %i.\n\n",
-                           pid_fork, args[0], status_strings[status_res], info);
+                printf("\nPrimer Plano    pid: %i, comando: %s, %s, info: %i.\n\n",
+                       pid_fork, args[0], status_strings[status_res], info);
                 //}
 
             } else {    // Proceso en BACKGROUND.
@@ -231,7 +249,7 @@ int main(void) {
 
                 /// (4)  La Shell muestra un mensaje del estado del comando ejecutado.
                 //if (info != 1) {
-                    printf("\nSegundo Plano    Ejecutándose... pid: %i, comando: %s.\n\n", pid_fork, args[0]);
+                printf("\nSegundo Plano    Ejecutándose... pid: %i, comando: %s.\n\n", pid_fork, args[0]);
                 //}
             }
 
