@@ -96,9 +96,9 @@ int main(void) {
         /// Comandos Internos ("cd", "jobs", "fg" y "bg").
         if(strcmp(args[0], "cd") == 0) {        // "strcmp" para comparar Strings.
             if(args[1] != NULL) {
-                chdir(args[1]);         // Cambiar directorio a "args[1]" si lo encuentra, si no, seguir con el codigo.
-
-                printf("\nNo se puede cambiar a la ruta '%s'.\n\n", args[1]);
+                if(chdir(args[1]) == -1) {      // Cambiar directorio a "args[1]" si lo encuentra, si falla devuelve "-1".
+                    printf("\nNo se puede cambiar a la ruta '%s'.\n\n", args[1]);
+                }
 
             }else{
                 chdir(getenv("HOME"));  // "getenv" para convertir un String en ruta.
