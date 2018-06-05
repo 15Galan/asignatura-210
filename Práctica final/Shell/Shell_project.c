@@ -168,7 +168,6 @@ int main(void) {
         }
 
         if(strcmp(args[0], "bg") == 0) {
-            enum status status_res;     // Indicara al final el estado del proceso (si finalizo o no).
             job* auxiliar;              // Tratar el proceso (nodo de la lista).
             int id;                     // Posicion del proceso en la lista.
 
