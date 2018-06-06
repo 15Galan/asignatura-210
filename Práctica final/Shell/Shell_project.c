@@ -119,7 +119,6 @@ int main(void) {
         }
 
         if(strcmp(args[0], "fg") == 0) {
-            enum status status_res;     // Indicara al final el estado del proceso (si finalizo o no).
             job* auxiliar;              // Tratar el proceso (nodo de la lista).
             int id;                     // Posicion del proceso en la lista.
 
@@ -190,7 +189,7 @@ int main(void) {
 
                 killpg(auxiliar->pgid, SIGCONT);    // Envia una señal al grupo de procesos para que estos continuen.
 
-                printf("\nSegundo Plano    Ejecutándose... pid: %i, comando: %s.\n\n", pid_fork, args[0]);
+                printf("\nSegundo Plano    Ejecutándose... pid: %i, comando: %s.\n\n", auxiliar->pgid, auxiliar->command);
 
             }
 
