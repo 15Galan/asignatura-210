@@ -19,6 +19,13 @@ Para compilar y ejecutar el programa:
 
 #define MAX_LINE 256	    // 256 caracteres por linea (por comando), deberia ser suficiente.
 
+#define NEGRO    "\x1b[0m"
+#define ROJO     "\x1b[31;1;1m"
+#define VERDE    "\x1b[32;1;1m"
+#define AZUL     "\x1b[34;1;1m"
+#define CIAN     "\x1b[36;1;1m"
+#define AMARILLO "\x1b[33;1;1m"
+#define PURPURA  "\x1b[35;1;1m"
 
 job* tareas;    // Debe declararse global para que pueda usarse por el manejador.
 
@@ -42,14 +49,16 @@ void manejador(int signal_id){      /// "signal(SEÑAL, manejador)" espera un "v
 
         if(pid_wait == trabajos->pgid) {    // Si el PID devuelto es el mismo, quiere decir que algo le paso al proceso.
             if(status_res != SUSPENDED) {       // El proceso ha terminado o ha enviado una señal.
-                printf("\nSegundo Plano    El proceso '%s' (pid: %i) ha finalizado.\n", trabajos->command, trabajos->pgid);
+                printf(AZUL"\nSegundo Plano (finalizó)\n    pid: %i, comando: %s.\n"NEGRO,
+                       trabajos->pgid, trabajos->command);
 
                 job* auxiliar = trabajos->next; // Guardar temporalmente el puntero al siguiente proceso de la lista.
                 delete_job(tareas, trabajos);   // Elimina el proceso "trabajos" de la lista "tareas".
                 trabajos = auxiliar;            // Actualizar el trabajo (tarea) al siguiente, usando "auxiliar".
 
             }else{  // status_res == SUSPENDED.
-                printf("\nSegundo Plano    El proceso '%s' (pid: %i) se ha suspendido.\n", trabajos->command, trabajos->pgid);
+                printf(AZUL"\nSegundo Plano (se suspendió)\n    pid: %i, comando: %s.\n"NEGRO,
+                       trabajos->pgid, trabajos->command);
 
                 trabajos->state = STOPPED;  // Cambiar estado del proceso a STOPPED.
                 trabajos = trabajos->next;  // Actualizar el trabajo (tarea) al siguiente.
@@ -97,7 +106,7 @@ int main(void) {
         if(strcmp(args[0], "cd") == 0) {        // "strcmp" para comparar Strings.
             if(args[1] != NULL) {
                 if(chdir(args[1]) == -1) {      // Cambiar directorio a "args[1]" si lo encuentra, si falla devuelve "-1".
-                    printf("\nNo se puede cambiar a la ruta '%s'.\n\n", args[1]);
+                    printf(ROJO"\nNo se puede cambiar a la ruta '%s'.\n\n"NEGRO, args[1]);
                 }
 
             }else{
@@ -109,10 +118,10 @@ int main(void) {
 
         if(strcmp(args[0], "jobs") == 0) {      // "strcmp" para comparar Strings.
             if(list_size(tareas) != 0) {
-                print_job_list(tareas);                         // Si la lista no esta vacia (0 elementos), la imprime.
+                print_job_list(tareas);         // Si la lista no esta vacia (0 elementos), la imprime.
 
             }else{
-                printf("\nNo hay procesos (lista vacía).\n\n"); // Si no, indica que esta vacia.
+                printf(VERDE"\nLista vacía\n    No hay procesos que mostrar.\n\n"NEGRO); // Si no, indica que esta vacia.
             }
 
             continue;   // La Shell debe recibir otro comando tras finalizar la ejecucion de un comando interno.
@@ -132,13 +141,14 @@ int main(void) {
             auxiliar = get_item_bypos(tareas, id);  // Se obtiene el proceso indicado por el "id" en la lista "tareas".
 
             if(auxiliar == NULL){
-                printf("\nERROR: Proceso no encontrado.\n\n");
+                printf(ROJO"\nLista vacía\n    No hay procesos que pasar a Primer Plano.\n\n"NEGRO);
 
             }else{
                 if(auxiliar->state != FOREGROUND) {   // Actuar solo cuando la tarea esta en segundo plano o suspendida.
                     auxiliar->state = FOREGROUND;       // Cambiar de BACKGROUND a FOREGROUND para ponerlo en primer plano.
 
-                    printf("\nEl proceso '%s' (id en lista: %i) ha pasado a Primer Plano.\n\n", auxiliar->command, id);
+                    printf(AMARILLO"\nPasó a Primer Plano\n    [%i] pid: %i, comando: %s.\n\n"NEGRO,
+                           id, auxiliar->pgid, auxiliar->command);
 
                     set_terminal(auxiliar->pgid);       // Asigna el Terminal al proceso indicado.
                     killpg(auxiliar->pgid, SIGCONT);    // Envia una señal al grupo de procesos para que estos continuen.
@@ -147,18 +157,21 @@ int main(void) {
 
                     status_res = analyze_status(status, &info);     // Saber el estado para saber si finalizo la ejecucion.
 
-                    printf("\nPrimer Plano    pid: %i, comando: %s, %s, info: %i.\n\n",
-                           auxiliar->pgid, auxiliar->command, status_strings[status_res], info);
-
                     if (status_res != SUSPENDED) {      // Si el estado no es SUSPENDED, el proceso termino su ejecucion.
+                        printf(AMARILLO"\nPrimer Plano (finalizó)\n    [%i] pid: %i, comando: %s.\n\n"NEGRO,
+                               id, auxiliar->pgid, auxiliar->command);
+
                         delete_job(tareas, auxiliar);   // Se elimina el proceso de la lista "tareas".
 
                     } else {                            // Si el estado es SUSPENDED, el proceso esta detenido.
+                        printf(AMARILLO"\nPrimer Plano (se suspendió)\n    [%i] pid: %i, comando: %s.\n\n"NEGRO,
+                               id, auxiliar->pgid, auxiliar->command);
+
                         auxiliar->state = STOPPED;      // Se indica que el proceso esta STOPPED (detenido) en su estado.
                     }
 
                 }else{
-                    printf("El proceso '%s' (pid: %i) no estaba en Segundo Plano o Suspendido.",
+                    printf(AMARILLO"El proceso '%s' (pid: %i) no estaba en Segundo Plano o Suspendido."NEGRO,
                             auxiliar->command, auxiliar->pgid);
                 }
             }
@@ -180,16 +193,15 @@ int main(void) {
             auxiliar = get_item_bypos(tareas, id);  // Se obtiene el proceso indicado por el "id" en la lista "tareas".
 
             if(auxiliar == NULL) {
-                printf("\nERROR: Proceso no encontrado.\n\n");
+                printf(ROJO"\nLista vacía\n    No hay procesos que pasar a Segundo Plano.\n\n"NEGRO);
 
             }else{
                 auxiliar->state = BACKGROUND;       // Cambiar de FOREGROUND a BACKGROUND para ponerlo en segundo plano.
 
-                printf("\nEl proceso '%s' (id en lista: %i) ha pasado a Segundo Plano.\n\n", auxiliar->command, id);
-
                 killpg(auxiliar->pgid, SIGCONT);    // Envia una señal al grupo de procesos para que estos continuen.
 
-                printf("\nSegundo Plano    Ejecutándose... pid: %i, comando: %s.\n\n", auxiliar->pgid, auxiliar->command);
+                printf(AMARILLO"\nPasó a Segundo Plano (ejecutándose...)\n    [%i] pid: %i, comando: %s.\n\n"NEGRO,
+                       id, auxiliar->pgid, auxiliar->command);
 
             }
 
@@ -212,7 +224,7 @@ int main(void) {
             restore_terminal_signals();     // Restaurar señales del Terminal.
             execvp(args[0], args);          // Ejecutar comando introducido o devuelve error.
 
-            printf("\nERROR: Comando '%s' no encontrado.\n\n", args[0]);
+            printf("\nComando '%s' no encontrado.\n\n", args[0]);
 
             exit(EXIT_FAILURE);
 
@@ -235,7 +247,7 @@ int main(void) {
 
                 /// (4) La Shell muestra un mensaje del estado del comando ejecutado.
                 //if (info != 1) {
-                printf("\nPrimer Plano    pid: %i, comando: %s, %s, info: %i.\n\n",
+                printf("\nPrimer Plano\n    pid: %i, comando: %s, %s, info: %i.\n\n",
                        pid_fork, args[0], status_strings[status_res], info);
                 //}
 
@@ -247,7 +259,7 @@ int main(void) {
 
                 /// (4)  La Shell muestra un mensaje del estado del comando ejecutado.
                 //if (info != 1) {
-                printf("\nSegundo Plano    Ejecutándose... pid: %i, comando: %s.\n\n", pid_fork, args[0]);
+                printf("\nSegundo Plano    (ejecutándose...)\n    pid: %i, comando: %s.\n\n", pid_fork, args[0]);
                 //}
             }
 
