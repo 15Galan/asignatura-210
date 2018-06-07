@@ -40,6 +40,8 @@ void manejador(int signal_id){      /// "signal(SEÑAL, manejador)" espera un "v
     enum status status_res;         // Estado procesado por "analyze_status()".
     job* trabajos = tareas->next;   // Puntero a "tareas" (el primer nodo contiene informacion, no es una tarea).
 
+    printf(PURPURA"\nOuch!\n"NEGRO);    /// (Obligatorio) Ejercicio 1.
+
     block_SIGCHLD();                // Se accede a la lista de tareas.
 
     while(trabajos != NULL) {
