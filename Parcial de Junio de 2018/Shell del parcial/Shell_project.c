@@ -63,6 +63,9 @@ void manejador(int signal_id){      /// "signal(SEÑAL, manejador)" espera un "v
                        trabajos->pgid, trabajos->command);
 
                 trabajos->state = STOPPED;  // Cambiar estado del proceso a STOPPED.
+
+                printf(PURPURA"\n¡Quiero aprobar!\n"NEGRO);     /// (Obligatorio) Ejercicio 2.
+
                 trabajos = trabajos->next;  // Actualizar el trabajo (tarea) al siguiente.
             }
 
