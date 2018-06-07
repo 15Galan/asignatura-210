@@ -28,6 +28,7 @@ Para compilar y ejecutar el programa:
 #define PURPURA  "\x1b[35;1;1m"
 
 job* tareas;    // Debe declararse global para que pueda usarse por el manejador.
+job* tareas_sig;    // Lista para almacenar las tareas (procesos) terminados con SIGNALED.
 
 // -----------------------------------------------------------------
 ///                          MANEJADOR
@@ -51,6 +52,12 @@ void manejador(int signal_id){      /// "signal(SEÑAL, manejador)" espera un "v
 
         if(pid_wait == trabajos->pgid) {    // Si el PID devuelto es el mismo, quiere decir que algo le paso al proceso.
             if(status_res != SUSPENDED) {       // El proceso ha terminado o ha enviado una señal.
+
+                /// (Obligatorio) Ejercicio 3.
+                if(status_res == SIGNALED){     // Si terminó con una señal, se almacena en la lista "tareas_sig".
+                    add_job(tareas_sig, trabajos);
+                }
+
                 printf(AZUL"\nSegundo Plano (finalizó)\n    pid: %i, comando: %s.\n"NEGRO,
                        trabajos->pgid, trabajos->command);
 
@@ -95,6 +102,7 @@ int main(void) {
 
     /// Variables utiles (mias):
     tareas = new_list("Lista de Tareas");   // Inicializacion de la lista de tareas.
+    tareas_sig = new_list("Tareas terminadas con SIGNALED");
 
     ignore_terminal_signals();      // Ignorar señales del Terminal.
     signal(SIGCHLD, manejador);     // Manejar señales SIGCHLD con el "manejador".
@@ -107,7 +115,7 @@ int main(void) {
 
         if (args[0] == NULL) continue;  // Si se introduce un comando "vacio" se vuelve a pedir.
 
-        /// Comandos Internos ("cd", "jobs", "fg" y "bg").
+        /// Comandos Internos ("cd", "jobs", "fg", "bg" y "sig").
         if(strcmp(args[0], "cd") == 0) {        // "strcmp" para comparar Strings.
             if(args[1] != NULL) {
                 if(chdir(args[1]) == -1) {      // Cambiar directorio a "args[1]" si lo encuentra, si falla devuelve "-1".
@@ -163,6 +171,12 @@ int main(void) {
                     status_res = analyze_status(status, &info);     // Saber el estado para saber si finalizo la ejecucion.
 
                     if (status_res != SUSPENDED) {      // Si el estado no es SUSPENDED, el proceso termino su ejecucion.
+
+                        /// (Obligatorio) Ejercicio 3.
+                        if(status_res == SIGNALED){     // Si terminó con una señal, se almacena en la lista "tareas_sig".
+                            add_job(tareas_sig, auxiliar);
+                        }
+
                         printf(AMARILLO"\nPrimer Plano (finalizó)\n    [%i] pid: %i, comando: %s.\n\n"NEGRO,
                                id, auxiliar->pgid, auxiliar->command);
 
@@ -213,6 +227,17 @@ int main(void) {
             continue;   // La Shell debe recibir otro comando tras finalizar la ejecucion de un comando interno.
         }
 
+        if(strcmp(args[0], "sig") == 0) {
+            if(args[1] == NULL) {   // Se introdujo "sig".
+                printf(PURPURA"\nEl número de tareas que terminaron por recibir una señal es %i.\n\n"NEGRO,
+                list_size(tareas_sig));
+
+            }else{                  // Se introdujo "sig <algo>".
+                printf(ROJO"\nEl comando 'sig' no requiere argumentos.\n\n"NEGRO);
+            }
+            continue;   // La Shell debe recibir otro comando tras finalizar la ejecucion de un comando interno.
+        }
+
 
 
         /// PASOS:
@@ -247,6 +272,14 @@ int main(void) {
                     job *proceso = new_job(pid_fork, args[0], STOPPED);  // Crear tarea con estado STOPPED (detenida).
                     block_SIGCHLD();            // Bloquear señal SIGCHLD para acceder a una estructura de datos (lista).
                     add_job(tareas, proceso);   // Añadir la tarea "proceso" a la lista "tareas".
+                    unblock_SIGCHLD();          // Desbloquear señal SIGCHLD al salir de una estructura de datos (lista).
+                }
+
+                /// (Obligatorio) Ejercicio 3.
+                if(status_res == SIGNALED) {     // Si la tarea en primer plano recibe una señal, se añade a "tareas_sig".
+                    job *proceso = new_job(pid_fork, args[0], FOREGROUND);  // Crear tarea con estado FOREGROUND.
+                    block_SIGCHLD();            // Bloquear señal SIGCHLD para acceder a una estructura de datos (lista).
+                    add_job(tareas_sig, proceso);   // Añadir la tarea "proceso" a la lista "tareas_sig".
                     unblock_SIGCHLD();          // Desbloquear señal SIGCHLD al salir de una estructura de datos (lista).
                 }
 
