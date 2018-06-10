@@ -254,7 +254,7 @@ int main(void) {
             restore_terminal_signals();     // Restaurar señales del Terminal.
             execvp(args[0], args);          // Ejecutar comando introducido o devuelve error.
 
-            printf("\nComando '%s' no encontrado.\n\n", args[0]);
+            printf(ROJO"\nComando '%s' no encontrado.\n\n"NEGRO, args[0]);
 
             exit(EXIT_FAILURE);
 
