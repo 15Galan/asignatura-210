@@ -102,6 +102,7 @@ int main(void) {
 
     /// Variables utiles (mias):
     tareas = new_list("Lista de Tareas");   // Inicializacion de la lista de tareas.
+    int veces;                              // Veces que se lanzara el comando, usada por "team".
 
     ignore_terminal_signals();      // Ignorar señales del Terminal.
     signal(SIGCHLD, manejador);     // Manejar señales SIGCHLD con el "manejador".
@@ -114,7 +115,9 @@ int main(void) {
 
         if (args[0] == NULL) continue;  // Si se introduce un comando "vacio" se vuelve a pedir.
 
-        /// Comandos Internos ("cd", "jobs", "fg", "bg" y "sig").
+        veces = 1;      // Se resetea tras cada ingreso de un comando nuevo (por defecto vale 1).
+
+        /// Comandos Internos ("cd", "jobs", "fg", "bg", "sig" y "team").
         if(strcmp(args[0], "cd") == 0) {        // "strcmp" para comparar Strings.
             if(args[1] != NULL) {
                 if(chdir(args[1]) == -1) {      // Cambiar directorio a "args[1]" si lo encuentra, si falla devuelve "-1".
@@ -238,67 +241,109 @@ int main(void) {
             continue;   // La Shell debe recibir otro comando tras finalizar la ejecucion de un comando interno.
         }
 
+        /// (Ampliacion) Ejercicio 4.
+        if(strcmp(args[0], "team") == 0) {
+            if(args[1] == NULL || args[2] == NULL){     // Faltan argumentos.
+                printf(ROJO"\nEl comando 'team' requiere 2 argumentos: team <valor> <comando>.\n\n"NEGRO);
 
+                veces = -1;     // Para no realizar el bucle "while(veces > 0)".
 
-        /// PASOS:
-        /// (1)  Crear un proceso hijo usando "fork()".
-        pid_fork = fork();
+            }else if(atoi(args[1]) < 0){    // El numero de veces que se lanza el proceso es un numero positivo.
+                printf(ROJO"\nEl primer argumento del comando 'team' debe ser un entero positivo.\n\n"NEGRO);
 
-        if (pid_fork == -1) {   // Necesario comprobar que el hijo se cree correctamente.
-            printf("Fallo en fork().\n\n");
+                veces = -1;     // Para no realizar el bucle "while(veces > 0)".
+
+            }else if(atoi(args[1]) > 0){
+                veces = atoi(args[1]);
+
+                int i = 0;
+
+                while(args[i] != NULL){
+                    args[i] = args[i+2];    // Eliminar los argumentos "team" y "n" del comando.
+
+                    i++;
+                }
+
+                background = 1;     // Los procesos deben lanzarse en segundo plano.
+
+            }else{
+                printf(ROJO"\nEl comando 'team' tiene como primer argumento un entero positivo.\n\n"NEGRO);
+
+                veces--;
+            }
+
+            //continue;     En este caso, la Shell debe seguir su ejecucion normal para activar el bucle.
         }
 
-        /// (2)  EL proceso hijo invoca "execvp()".
-        if (pid_fork == 0) {    // Proceso HIJO.
-            new_process_group(getpid());    // Crear un grupo de procesos para el proceso hijo.
-            restore_terminal_signals();     // Restaurar señales del Terminal.
-            execvp(args[0], args);          // Ejecutar comando introducido o devuelve error.
 
-            printf(ROJO"\nComando '%s' no encontrado.\n\n"NEGRO, args[0]);
 
-            exit(EXIT_FAILURE);
+        /// (Ampliacion) Ejercicio 4.
+        while(veces > 0) {
 
-        } else {    // Proceso PADRE.
-            new_process_group(pid_fork);    // Crear un grupo de procesos para el proceso padre.
+            /// PASOS:
+            /// (1)  Crear un proceso hijo usando "fork()".
+            pid_fork = fork();
 
-            /// (3)  Si "background == 0", el proceso padre espera, sino continua.
-            if (background == 0) {          // Proceso en FOREGROUND.
-                set_terminal(pid_fork);                     // Asigna el Terminal al proceso hijo.
-                pid_wait = waitpid(pid_fork, &status, WUNTRACED);
-                set_terminal(getpid());                     // Asigna el Terminal al proceso en ejecucion.
-                status_res = analyze_status(status, &info); // Estado procesado (Exited, Signaled o Suspended).
+            if (pid_fork == -1) {   // Necesario comprobar que el hijo se cree correctamente.
+                printf("Fallo en fork().\n\n");
+            }
 
-                if(status_res == SUSPENDED) {   // Si la tarea en primer plano se suspende, debe almacenarse detenida.
-                    job *proceso = new_job(pid_fork, args[0], STOPPED);  // Crear tarea con estado STOPPED (detenida).
+            /// (2)  EL proceso hijo invoca "execvp()".
+            if (pid_fork == 0) {    // Proceso HIJO.
+                new_process_group(getpid());    // Crear un grupo de procesos para el proceso hijo.
+                restore_terminal_signals();     // Restaurar señales del Terminal.
+                execvp(args[0], args);          // Ejecutar comando introducido o devuelve error.
+
+                printf(ROJO"\nComando '%s' no encontrado.\n\n"NEGRO, args[0]);
+
+                exit(EXIT_FAILURE);
+
+            } else {    // Proceso PADRE.
+                new_process_group(pid_fork);    // Crear un grupo de procesos para el proceso padre.
+
+                /// (3)  Si "background == 0", el proceso padre espera, sino continua.
+                if (background == 0) {          // Proceso en FOREGROUND.
+                    set_terminal(pid_fork);                     // Asigna el Terminal al proceso hijo.
+                    pid_wait = waitpid(pid_fork, &status, WUNTRACED);
+                    set_terminal(getpid());                     // Asigna el Terminal al proceso en ejecucion.
+                    status_res = analyze_status(status, &info); // Estado procesado (Exited, Signaled o Suspended).
+
+                    if (status_res == SUSPENDED) {   // Si la tarea en primer plano se suspende, debe almacenarse detenida.
+                        job *proceso = new_job(pid_fork, args[0], STOPPED);  // Crear tarea con estado STOPPED (detenida).
+                        block_SIGCHLD();            // Bloquear señal SIGCHLD para acceder a una estructura de datos (lista).
+                        add_job(tareas, proceso);   // Añadir la tarea "proceso" a la lista "tareas".
+                        unblock_SIGCHLD();          // Desbloquear señal SIGCHLD al salir de una estructura de datos (lista).
+                    }
+
+                    /// (Obligatorio) Ejercicio 3.
+                    if (status_res == SIGNALED) {     // Si terminó con una señal, se incrementa el contador.
+                        contador_sig++;
+                    }
+
+                    /// (4) La Shell muestra un mensaje del estado del comando ejecutado.
+                    //if (info != 1) {
+                    printf("\nPrimer Plano\n    pid: %i, comando: %s, %s, info: %i.\n\n",
+                           pid_fork, args[0], status_strings[status_res], info);
+                    //}
+
+                } else {    // Proceso en BACKGROUND.
+                    job *proceso = new_job(pid_fork, args[0], BACKGROUND);  // Crear tarea con estado BACKGROUND.
                     block_SIGCHLD();            // Bloquear señal SIGCHLD para acceder a una estructura de datos (lista).
                     add_job(tareas, proceso);   // Añadir la tarea "proceso" a la lista "tareas".
                     unblock_SIGCHLD();          // Desbloquear señal SIGCHLD al salir de una estructura de datos (lista).
+
+                    /// (4)  La Shell muestra un mensaje del estado del comando ejecutado.
+                    //if (info != 1) {
+                    printf("\nSegundo Plano    (ejecutándose...)\n    pid: %i, comando: %s.\n\n", pid_fork, args[0]);
+                    //}
                 }
 
-                /// (Obligatorio) Ejercicio 3.
-                if(status_res == SIGNALED){     // Si terminó con una señal, se incrementa el contador.
-                    contador_sig++;
-                }
-
-                /// (4) La Shell muestra un mensaje del estado del comando ejecutado.
-                //if (info != 1) {
-                printf("\nPrimer Plano\n    pid: %i, comando: %s, %s, info: %i.\n\n",
-                       pid_fork, args[0], status_strings[status_res], info);
-                //}
-
-            } else {    // Proceso en BACKGROUND.
-                job* proceso = new_job(pid_fork, args[0], BACKGROUND);  // Crear tarea con estado BACKGROUND.
-                block_SIGCHLD();            // Bloquear señal SIGCHLD para acceder a una estructura de datos (lista).
-                add_job(tareas, proceso);   // Añadir la tarea "proceso" a la lista "tareas".
-                unblock_SIGCHLD();          // Desbloquear señal SIGCHLD al salir de una estructura de datos (lista).
-
-                /// (4)  La Shell muestra un mensaje del estado del comando ejecutado.
-                //if (info != 1) {
-                printf("\nSegundo Plano    (ejecutándose...)\n    pid: %i, comando: %s.\n\n", pid_fork, args[0]);
-                //}
+                /// (5)  El bucle vuelve a la funcion "get_commnad()".
             }
 
-            /// (5)  El bucle vuelve a la funcion "get_commnad()".
+            veces--;
+
+            // Fin del "while()" del comando interno "team".
         }
 
         // Fin del "while()".
